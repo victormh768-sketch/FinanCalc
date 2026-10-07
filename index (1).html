@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FinanCalc: calculadoras de dinero (sueldo neto, IVA, préstamo, hipoteca)</title>
+<meta name="description" content="FinanCalc, calculadoras gratis: sueldo neto por país, IVA, porcentaje, interés compuesto, préstamo, hipoteca, ahorro y regla de tres.">
+<style>
+:root{--bg:#eef1f5;--c:#fff;--t:#0f2239;--m:#5b6b80;--a:#1f5fd6;--b:#d8dee8;--n:#0f2239}
+@media(prefers-color-scheme:dark){:root{--bg:#0a1424;--c:#111f35;--t:#e6ecf5;--m:#8fa1ba;--a:#6ea0ff;--b:#223552;--n:#070f1c}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.55 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--n);color:#fff;padding:22px max(24px,calc((100% - 1040px)/2));display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+h1{margin:0;font:600 1.35rem "IBM Plex Serif",Georgia,serif}
+header p{color:#9fb1c9;margin:4px 0 0;font-size:.92rem}
+.app{max-width:1040px;margin:28px auto;padding:0 24px;display:grid;grid-template-columns:210px 1fr;gap:28px;align-items:start}
+nav{display:flex;flex-direction:column;gap:2px}
+nav button{text-align:left;border:0;border-left:3px solid transparent;background:transparent;color:var(--m);padding:10px 14px;border-radius:0 6px 6px 0;cursor:pointer;font:inherit}
+nav button:hover{color:var(--t)}
+nav button.on{background:var(--c);color:var(--t);font-weight:600;border-left-color:var(--a)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+.card{background:var(--c);border:1px solid var(--b);border-radius:6px;display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
+h2{grid-column:1/-1;margin:0;padding:18px 24px;font:600 1.2rem "IBM Plex Serif",Georgia,serif;border-bottom:1px solid var(--b)}
+.in{padding:8px 24px 26px}
+label{display:block;margin:14px 0 5px;font-size:.85rem;font-weight:500;color:var(--m)}
+input,select{width:100%;padding:10px 12px;border:1px solid var(--b);border-radius:4px;background:var(--c);color:var(--t);font:inherit;font-variant-numeric:tabular-nums}
+input:focus,select:focus{border-color:var(--a)}
+.out{padding:24px;background:var(--n);color:#b7c5da}
+.big{font:600 clamp(2rem,5vw,2.7rem)/1.1 "IBM Plex Serif",Georgia,serif;color:#fff;font-variant-numeric:tabular-nums;margin-bottom:4px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #263c5a;font-size:.93rem}
+.row:first-of-type{margin-top:16px}
+.row:last-of-type{border:0}
+.row b{color:#fff;font-weight:500;font-variant-numeric:tabular-nums;text-align:right}
+small{color:#8fa3be;display:block;margin-top:14px;font-size:.8rem}
+label.pais{display:flex;align-items:center;gap:8px;margin:0;color:#9fb1c9}
+header select{width:auto;background:#16304f;color:#fff;border-color:#2c4666}
+.src{max-width:1040px;margin:0 auto 24px;padding:0 24px;font-size:.88rem;color:var(--m)}
+.src summary{cursor:pointer;font-weight:600;color:var(--t)}
+.src a{color:var(--a)}
+.src li{margin:6px 0}
+footer{text-align:center;color:var(--m);font-size:.82rem;padding:0 24px 32px}
+@media(max-width:820px){.app{grid-template-columns:1fr;gap:16px;margin-top:16px}nav{flex-direction:row;overflow-x:auto;gap:6px;padding-bottom:4px}nav button{white-space:nowrap;border:1px solid var(--b);border-radius:99px;padding:8px 14px}nav button.on{border-color:var(--a)}}
+@media(max-width:640px){.card{grid-template-columns:1fr}}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@600&display=swap">
+</head>
+<body>
+<header><div><h1>FinanCalc</h1><p>Calculadoras de dinero: gratis, sin registro y sin enviar tus datos a ningún sitio.</p></div><label class="pais">País <select id="pais" aria-label="País"></select></label></header>
+<div class="app"><nav aria-label="Calculadoras"></nav>
+<main></main></div>
+<details class="src"><summary>Fuentes y metodología</summary><div id="src"></div></details>
+<footer>Resultados orientativos. No sustituyen el asesoramiento fiscal o financiero profesional.</footer>
+<script>
+const $=s=>document.querySelector(s),I=Infinity;
+const fm=(n,c=cur)=>isFinite(n)?new Intl.NumberFormat('es-ES',{style:'currency',currency:c}).format(n):'—';
+const nf=n=>isFinite(n)?new Intl.NumberFormat('es-ES',{maximumFractionDigits:2}).format(n):'—';
+const R=(a,b)=>`<div class="row"><span>${a}</span><b>${b}</b></div>`;
+const tax=(x,br)=>{let t=0,p=0;for(const[l,r]of br){if(x>p)t+=(Math.min(x,l)-p)*r;p=l}return t};
+const pmt=(P,r,y)=>{const i=r/1200,n=y*12;return i?P*i/(1-Math.pow(1+i,-n)):P/n};
+
+/* País: n=nombre, c=moneda, f(bruto) => [cotizaciones, impuesto]. Tramos aproximados (ver Fuentes), persona soltera sin hijos. */
+const C={
+ES:{n:'España',c:'EUR',f:g=>{const s=Math.min(g,61214.4)*.065;return[s,tax(g-s-2000,[[12450,.19],[20200,.24],[35200,.3],[60000,.37],[300000,.45],[I,.47]])-1054.5]}},
+FR:{n:'Francia',c:'EUR',f:g=>{const s=g*.22;return[s,tax((g-s)*.9,[[11497,0],[29315,.11],[83823,.3],[180294,.41],[I,.45]])]}},
+DE:{n:'Alemania',c:'EUR',f:g=>{const s=Math.min(g,90600)*.2;return[s,tax(g-s,[[12096,0],[17443,.19],[68480,.33],[277825,.42],[I,.45]])]}},
+IT:{n:'Italia',c:'EUR',f:g=>{const s=g*.0919,x=g-s,d=x<15000?1955:x<28000?1910+1190*(28000-x)/13000:x<50000?1910*(50000-x)/22000:0;return[s,tax(x,[[28000,.23],[50000,.35],[I,.43]])-d]}},
+PT:{n:'Portugal',c:'EUR',f:g=>{const s=g*.11;return[s,tax(Math.max(0,g-Math.max(s,4462)),[[8342,.13],[12587,.165],[17838,.22],[23089,.25],[29397,.32],[43090,.355],[46566,.435],[86634,.45],[I,.48]])]}},
+NL:{n:'Países Bajos',c:'EUR',f:g=>[0,tax(g,[[38441,.3582],[76817,.3748],[I,.495]])-Math.max(0,5500-.06*Math.max(0,g-30000))]},
+UK:{n:'Reino Unido',c:'GBP',f:g=>[tax(g,[[12570,0],[50270,.08],[I,.02]]),tax(g,[[12570,0],[50270,.2],[125140,.4],[I,.45]])]},
+US:{n:'EE. UU. (solo federal)',c:'USD',f:g=>[Math.min(g,176100)*.062+g*.0145,tax(Math.max(0,g-15000),[[11925,.1],[48475,.12],[103350,.22],[197300,.24],[250525,.32],[626350,.35],[I,.37]])]},
+IE:{n:'Irlanda',c:'EUR',f:g=>[(g>13000?tax(g,[[12012,.005],[28700,.02],[70044,.03],[I,.08]]):0)+g*.042375,tax(g,[[44000,.2],[I,.4]])-4000]},
+CA:{n:'Canadá (solo federal)',c:'CAD',f:g=>[Math.max(0,Math.min(g,74600)-3500)*.0595+Math.max(0,Math.min(g,85000)-74600)*.04+Math.min(g,68900)*.0163,tax(g,[[58523,.14],[117045,.205],[181440,.26],[258482,.29],[I,.33]])-16452*.14]},
+AU:{n:'Australia (2026-27)',c:'AUD',f:g=>[g*.02,tax(g,[[18200,0],[45000,.15],[135000,.3],[190000,.37],[I,.45]])-(g<=37500?700:g<=45000?700-.05*(g-37500):g<=66667?325-.015*(g-45000):0)]}
+};
+
+let pais=(()=>{try{return localStorage.getItem('fc_pais')}catch(e){}})();if(!C[pais])pais='ES';
+let cur=C[pais].c,idx=0;
+const VAT={ES:21,FR:20,DE:19,IT:22,PT:23,NL:21,UK:20,US:0,IE:23,CA:5,AU:10};
+const sym=()=>new Intl.NumberFormat('es-ES',{style:'currency',currency:cur}).formatToParts(1).find(p=>p.type=='currency').value;
+
+/* Cada calculadora: t=título, f=campos [id, etiqueta, valor por defecto | opciones], r=resultado */
+const K=[
+{t:'💼 Sueldo neto',f:[['g','Salario bruto anual',30000],['p','País',Object.keys(C).map(k=>[k,C[k].n])],['n','Número de pagas',[12,14]]],
+r:v=>{const o=C[v.p],[s,t0]=o.f(v.g),t=Math.max(0,t0),n=v.g-s-t;
+return `<div class="big">${fm(n/v.n,o.c)}</div>netos al mes (${v.n} pagas)`+R('Neto anual',fm(n,o.c))+R('Seguridad social',fm(s,o.c))+R('Impuesto sobre la renta',fm(t,o.c))+R('Tipo efectivo total',nf((1-n/v.g)*100)+' %')+'<small>Estimación para una persona soltera sin hijos. No incluye deducciones personales, impuestos regionales o estatales ni cotizaciones opcionales.</small>'}},
+{t:'🧾 IVA',f:[['b','Importe',100],['r','IVA (%)',()=>VAT[pais]],['m','Quiero',[['a','Añadir IVA (de base a total)'],['q','Quitar IVA (de total a base)']]]],
+r:v=>{const b=v.m=='a'?v.b:v.b/(1+v.r/100),i=b*v.r/100;return `<div class="big">${fm(v.m=='a'?b+i:b)}</div>${v.m=='a'?'total con IVA':'base sin IVA'}`+R('Base imponible',fm(b))+R('IVA',fm(i))+R('Total',fm(b+i))}},
+{t:'％ Porcentaje',f:[['a','Valor A',20],['b','Valor B',150],['m','Cálculo',[['o','A % de B'],['i','A es qué % de B'],['u','Aumentar B un A %'],['d','Reducir B un A %']]]],
+r:v=>{const x={o:v.a*v.b/100,i:v.a/v.b*100,u:v.b*(1+v.a/100),d:v.b*(1-v.a/100)}[v.m];return `<div class="big">${nf(x)}${v.m=='i'?' %':''}</div>resultado`}},
+{t:'📈 Interés compuesto',f:[['p','Capital inicial (€)',5000],['c','Aportación mensual (€)',200],['r','Interés anual (%)',5],['y','Años',10]],
+r:v=>{let b=v.p;for(let m=0;m<v.y*12;m++)b=b*(1+v.r/1200)+v.c;const ap=v.p+v.c*v.y*12;return `<div class="big">${fm(b)}</div>capital final`+R('Total aportado',fm(ap))+R('Intereses ganados',fm(b-ap))+'<small>Capitalización mensual con aportación a final de mes.</small>'}},
+{t:'🏦 Préstamo',f:[['p','Importe (€)',10000],['r','Interés anual (TIN %)',7],['y','Plazo (años)',5]],
+r:v=>{const c=pmt(v.p,v.r,v.y),t=c*v.y*12;return `<div class="big">${fm(c)}</div>cuota mensual`+R('Total a devolver',fm(t))+R('Intereses totales',fm(t-v.p))+'<small>Sistema de amortización francés (cuota fija).</small>'}},
+{t:'🏠 Hipoteca',f:[['p','Precio de la vivienda (€)',250000],['e','Entrada (%)',20],['r','Interés anual (%)',3],['y','Plazo (años)',30]],
+r:v=>{const f=v.p*(1-v.e/100),c=pmt(f,v.r,v.y),t=c*v.y*12;return `<div class="big">${fm(c)}</div>cuota mensual`+R('Entrada',fm(v.p*v.e/100))+R('Importe financiado',fm(f))+R('Intereses totales',fm(t-f))+R('Coste total (con entrada)',fm(t+v.p*v.e/100))+'<small>Los gastos de compra (impuestos, notaría, registro) suelen sumar un 10–12 % del precio y no están incluidos.</small>'}},
+{t:'🐷 Ahorro',f:[['m','Objetivo (€)',10000],['y','Plazo (años)',3],['r','Rentabilidad anual (%)',2]],
+r:v=>{const i=v.r/1200,n=v.y*12,c=i?v.m*i/(Math.pow(1+i,n)-1):v.m/n;return `<div class="big">${fm(c)}</div>a ahorrar cada mes`+R('Total aportado',fm(c*n))+R('Intereses estimados',fm(v.m-c*n))}},
+{t:'🏛️ Depósito',f:[['p','Capital (€)',10000],['r','Interés anual TIN (%)',3],['m','Plazo (meses)',12],['i','Cobro de intereses',[['v','Al vencimiento'],['m','Mensual, reinvertidos'],['a','Anual, reinvertidos']]],['x','Impuesto sobre los intereses',[[0,'Sin impuesto (0 %)'],[19,'19 % · España, hasta 6.000 € de intereses'],[21,'21 % · España, de 6.000 a 50.000 €'],[23,'23 % · España, de 50.000 a 200.000 €'],[27,'27 % · España, de 200.000 a 300.000 €'],[28,'28 % · España, más de 300.000 €'],[15,'15 %'],[20,'20 %'],[25,'25 %'],[30,'30 %'],['c','Otro porcentaje…']]],['o','Porcentaje personalizado (%)',19]],
+r:v=>{const y=v.m/12,f=v.i=='v'?v.p*(1+v.r/100*y):v.i=='m'?v.p*Math.pow(1+v.r/1200,v.m):v.p*Math.pow(1+v.r/100,y),g=f-v.p,t=g*(v.x=='c'?v.o:v.x)/100,n=g-t,tae=(Math.pow(f/v.p,1/y)-1)*100;return `<div class="big">${fm(v.p+n)}</div>total al vencimiento (neto)`+R('Intereses brutos',fm(g))+R('Impuesto sobre intereses',fm(t))+R('Intereses netos',fm(n))+R('TAE',nf(tae)+' %')+'<small>El impuesto depende de tu país y de tu situación: elige el caso que más se parezca o escribe tu porcentaje. La TAE se calcula sobre el interés bruto.</small>'}},
+{t:'✖️ Regla de tres',f:[['t','Tipo',[['d','Directa (más A, más B)'],['i','Inversa (más A, menos B)']]],['a','Si A =',3],['b','corresponde a B =',12],['c','Entonces, para C =',5]],
+r:v=>{const x=v.t=='d'?v.b*v.c/v.a:v.a*v.b/v.c;return `<div class="big">${nf(x)}</div>valor de X`+R('Planteamiento',`${nf(v.a)} → ${nf(v.b)} · ${nf(v.c)} → X`)}}
+];
+
+const nav=$('nav'),box=$('main');
+K.forEach((k,i)=>{const b=document.createElement('button');b.textContent=k.t.replace(/^\S+\s+/,"");b.onclick=()=>show(i);nav.append(b)});
+function show(i){
+  const k=K[i];idx=i;
+  [...nav.children].forEach((b,j)=>b.classList.toggle('on',i==j));
+  box.innerHTML=`<div class="card"><h2>${k.t.replace(/^\S+\s+/,"")}</h2><div class="in">`+k.f.map(([id,l,d])=>`<label for="${id}">${l.replace(/€/g,sym())}</label>`+(Array.isArray(d)?`<select id="${id}">${d.map(o=>{o=[].concat(o);return`<option value="${o[0]}">${o[o.length-1]}</option>`}).join('')}</select>`:`<input id="${id}" type="number" step="any" min="0" inputmode="decimal" value="${typeof d=='function'?d():d}">`)).join('')+'</div><div class="out" aria-live="polite"></div></div>';
+  const sp=$('#p');if(sp&&sp.tagName=='SELECT')sp.value=pais;
+  const sx=$('#x');if(sx&&sx.tagName=='SELECT'&&pais=='ES')sx.value='19';
+  const run=()=>{const co=$('#o');if(co){const sh=$('#x').value=='c';co.style.display=co.previousElementSibling.style.display=sh?'':'none'}const v={};k.f.forEach(([id])=>{const x=$('#'+id).value;v[id]=x!==''&&!isNaN(+x)?+x:x});$('.out').innerHTML=k.r(v)};
+  box.oninput=run;run();
+}
+$('#pais').innerHTML=Object.keys(C).map(k=>`<option value="${k}">${C[k].n}</option>`).join('');
+$('#pais').value=pais;
+$('#pais').onchange=e=>{pais=e.target.value;cur=C[pais].c;try{localStorage.setItem('fc_pais',pais)}catch(x){}show(idx)};
+show(0);
+const S=[
+['España','https://sede.agenciatributaria.gob.es','Seguridad Social 2026 contrastada (6,5 % hasta 61.214 € al año). Escala del IRPF de 2025, sin contrastar; no distingue comunidades autónomas.'],
+['Francia','https://www.impots.gouv.fr','Tramos de 2025, sin contrastar. Cotizaciones aproximadas (22 %).'],
+['Alemania','https://www.bundesfinanzministerium.de','Tramos de 2025, sin contrastar. Cotizaciones aproximadas (20 %); sin impuesto de solidaridad ni eclesiástico.'],
+['Italia','https://www.agenziaentrate.gov.it','Tramos de 2025, sin contrastar. Sin tasas regionales ni municipales.'],
+['Portugal','https://info.portaldasfinancas.gov.pt','Tramos de 2025, sin contrastar.'],
+['Países Bajos','https://www.belastingdienst.nl','Tramos de 2025 con primas incluidas, sin contrastar. Crédito fiscal aproximado.'],
+['Reino Unido','https://www.gov.uk/income-tax-rates','Tramos y National Insurance de 2025, sin contrastar. Inglaterra, Gales e Irlanda del Norte.'],
+['EE. UU.','https://www.irs.gov','Solo impuesto federal y FICA, con datos de 2025 sin contrastar; las cifras de 2026 pueden diferir. No incluye impuestos estatales.'],
+['Irlanda','https://www.revenue.ie','Contrastado con datos de 2026: tramos del 20 % y 40 % (corte en 44.000 €), créditos de 4.000 €, USC y PRSI.'],
+['Canadá','https://www.canada.ca/en/revenue-agency.html','Contrastado con datos de 2026: tramos federales, CPP/CPP2 y EI. No incluye impuestos provinciales.'],
+['Australia','https://www.ato.gov.au','Contrastado con datos de 2026-27 (tipo del 15 % desde el 1 de julio de 2026), LITO y Medicare del 2 %. La aportación a la jubilación la paga la empresa.']
+];
+$('#src').innerHTML='<p>Los cálculos usan tramos y cotizaciones públicos, simplificados para una persona soltera sin hijos. El país elegido arriba cambia la moneda, el IVA por defecto y el país del sueldo neto. Los tipos generales de IVA (EE. UU. no tiene IVA; Canadá, solo el GST federal) y el impuesto sobre intereses de depósitos no están contrastados. Revisa siempre la fuente oficial antes de tomar decisiones.</p><ul>'+S.map(x=>`<li><a href="${x[1]}" target="_blank" rel="noopener">${x[0]}</a>: ${x[2]}</li>`).join('')+'</ul>';
+</script>
+</body>
+</html>
